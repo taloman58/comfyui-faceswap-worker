@@ -9,8 +9,12 @@ FROM runpod/worker-comfyui:5.7.1-flux1-schnell
 # =============================================================
 
 # --- YUZ DEGISTIRME ---
-# ReActor: Gercek yuz swap (tutarli, her frame'de ayni)
-RUN comfy-node-install comfyui-reactor
+# ReActor: Gercek yuz swap - ELLE KURULUM (comfy-node-install calismadi)
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/Gourieff/ComfyUI-ReActor.git && \
+    cd ComfyUI-ReActor && \
+    pip install -r requirements.txt && \
+    pip install insightface onnxruntime-gpu
 
 # IPAdapter Plus: Yuz tutarliligi, stil transferi, referans yuz
 RUN comfy-node-install comfyui_ipadapter_plus
