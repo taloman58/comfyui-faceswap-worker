@@ -1,16 +1,37 @@
-# ComfyUI Face Swap Worker (RunPod Serverless)
+# ComfyUI Full Content Creator - RunPod Serverless
 
-FLUX.1 Schnell + ReActor (face swap) + Video Helper Suite içeren custom ComfyUI worker.
+Instagram / sosyal medya icin tam donanimli ComfyUI worker.
 
-## Özellikler
+## Icerik
 
-- ✅ FLUX.1 Schnell ile resim üretimi
-- ✅ ReActor ile yüz değiştirme (face swap)
-- ✅ Video desteği (VHS - Video Helper Suite)
-- ✅ InsightFace modelleri dahil
+### Custom Nodes
 
-## RunPod'da Kullanım
+| Node                    | Ne Yapar                        |
+| ----------------------- | ------------------------------- |
+| **ReActor**             | Yuz degistirme (face swap)      |
+| **IPAdapter Plus**      | Yuz tutarliligi, stil transferi |
+| **Video Helper Suite**  | Video yukleme/kaydetme          |
+| **AnimateDiff**         | Metinden video, animasyon       |
+| **Frame Interpolation** | Video akicilastrma              |
+| **Ultimate SD Upscale** | Resim/video buyutme (4x)        |
+| **Impact Pack**         | Yuz algilama, segmentasyon      |
+| **Advanced ControlNet** | Poz/kenar/derinlik kontrolu     |
+| **KJ Nodes**            | Batch isleme, text overlay      |
+| **Essentials**          | Temel islem araclari            |
+| **WAS Node Suite**      | Yazi ekleme, filtreler          |
 
-1. Bu repo'yu RunPod GitHub integration ile import edin
-2. Serverless endpoint oluşturun (24GB+ GPU)
-3. Workflow gönderin
+### Modeller
+
+| Model               | Ne Yapar            |
+| ------------------- | ------------------- |
+| **FLUX.1 Schnell**  | Hizli resim uretimi |
+| **inswapper_128**   | Face swap motoru    |
+| **RealESRGAN x4**   | 4x upscale (genel)  |
+| **4x-UltraSharp**   | 4x upscale (keskin) |
+| **IP-Adapter Face** | Yuz referansi       |
+| **AnimateDiff v3**  | Video animasyon     |
+| **CLIP Vision**     | Gorsel anlama       |
+
+## Kullanim
+
+RunPod Serverless + 24GB+ GPU
