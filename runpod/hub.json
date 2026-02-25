@@ -1,0 +1,13 @@
+{
+  "title": "ComfyUI Face Swap Worker",
+  "description": "FLUX.1 Schnell + ReActor face swap + Video support",
+  "type": "serverless",
+  "category": "image",
+  "iconUrl": "https://example.com/icon.png",
+  "config": {
+    "runat": "GPU",
+    "containerDiskInGb": 30
+  },
+  "env": [],
+  "presets": []
+}

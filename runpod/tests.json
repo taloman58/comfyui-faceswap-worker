@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "flux_schnell_test",
+      "input": {
+        "workflow": {
+          "5": {
+            "inputs": {"width": 512, "height": 512, "batch_size": 1},
+            "class_type": "EmptySD3LatentImage"
+          },
+          "6": {
+            "inputs": {"text": "a cat", "clip": ["11", 0]},
+            "class_type": "CLIPTextEncode"
+          },
+          "7": {
+            "inputs": {"text": "", "clip": ["11", 0]},
+            "class_type": "CLIPTextEncode"
+          },
+          "10": {
+            "inputs": {"unet_name": "flux1-schnell.safetensors", "weight_dtype": "default"},
+            "class_type": "UNETLoader"
+          },
+          "11": {
+            "inputs": {"clip_name1": "clip_l.safetensors", "clip_name2": "t5xxl_fp8_e4m3fn.safetensors", "type": "flux"},
+            "class_type": "DualCLIPLoader"
+          },
+          "12": {
+            "inputs": {"vae_name": "ae.safetensors"},
+            "class_type": "VAELoader"
+          },
+          "13": {
+            "inputs": {"model": ["10", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0], "seed": 42, "steps": 4, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0},
+            "class_type": "KSampler"
+          },
+          "14": {
+            "inputs": {"samples": ["13", 0], "vae": ["12", 0]},
+            "class_type": "VAEDecode"
+          },
+          "15": {
+            "inputs": {"filename_prefix": "test", "images": ["14", 0]},
+            "class_type": "SaveImage"
+          }
+        }
+      },
+      "timeout": 120000
+    }
+  ]
+}
