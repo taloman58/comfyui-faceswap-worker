@@ -71,6 +71,4 @@ RUN mkdir -p /comfyui/models/ipadapter && \
     https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors
 
 # --- AnimateDiff Modeli ---
-RUN mkdir -p /comfyui/models/animatediff_models && \
-    wget -q -O /comfyui/models/animatediff_models/mm_sd15_v3.safetensors \
-    https://huggingface.co/guoyww/animatediff/resolve/main/mm_sd15_v3.safetensors
+# Not: AnimateDiff node kurulu, model gerektiginde ayrica eklenebilir
