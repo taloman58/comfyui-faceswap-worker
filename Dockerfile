@@ -9,12 +9,19 @@ FROM runpod/worker-comfyui:5.7.1-flux1-schnell
 # =============================================================
 
 # --- YUZ DEGISTIRME ---
-# ReActor: Gercek yuz swap - ELLE KURULUM (comfy-node-install calismadi)
+# Build araclari (insightface icin gerekli)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake && \
+    rm -rf /var/lib/apt/lists/*
+
+# InsightFace + onnxruntime (once pip'le kur)
+RUN pip install insightface==0.7.3 onnxruntime-gpu
+
+# ReActor node'unu klonla
 RUN cd /comfyui/custom_nodes && \
     git clone https://github.com/Gourieff/ComfyUI-ReActor.git && \
     cd ComfyUI-ReActor && \
-    pip install -r requirements.txt && \
-    pip install insightface onnxruntime-gpu
+    pip install -r requirements.txt || true
 
 # IPAdapter Plus: Yuz tutarliligi, stil transferi, referans yuz
 RUN comfy-node-install comfyui_ipadapter_plus
