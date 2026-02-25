@@ -14,9 +14,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # InsightFace (onnxruntime base image'da ZATEN var, tekrar kurma!)
 RUN pip install --no-cache-dir insightface
 
-# ReActor klonla (requirements.txt ATLA - cakisma yapar)
+# ReActor klonla
 RUN cd /comfyui/custom_nodes && \
     git clone https://github.com/Gourieff/ComfyUI-ReActor.git
+
+# ReActor bagimliliklari (insightface zaten kurulu, tekrar kurma)
+RUN cd /comfyui/custom_nodes/ComfyUI-ReActor && \
+    pip install --no-cache-dir \
+    albumentations>=1.4.16 \
+    onnx>=1.14.0 \
+    "opencv-python>=4.7.0.72" \
+    segment_anything \
+    ultralytics
+
+# buffalo_l modelleri (ReActor face detection icin gerekli)
+RUN mkdir -p /comfyui/models/insightface/models/buffalo_l && \
+    wget -q -O /comfyui/models/insightface/models/buffalo_l/det_10g.onnx \
+    "https://huggingface.co/datasets/Gourieff/ReActor/resolve/main/models/buffalo_l/det_10g.onnx" && \
+    wget -q -O /comfyui/models/insightface/models/buffalo_l/w600k_r50.onnx \
+    "https://huggingface.co/datasets/Gourieff/ReActor/resolve/main/models/buffalo_l/w600k_r50.onnx"
 
 # =============================================================
 # DIGER CUSTOM NODES
