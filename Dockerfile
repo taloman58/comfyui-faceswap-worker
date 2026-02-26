@@ -27,12 +27,6 @@ RUN cd /comfyui/custom_nodes/ComfyUI-ReActor && \
     segment_anything \
     ultralytics
 
-# buffalo_l modelleri (ReActor face detection icin gerekli)
-RUN mkdir -p /comfyui/models/insightface/models/buffalo_l && \
-    wget -q -O /comfyui/models/insightface/models/buffalo_l/det_10g.onnx \
-    "https://huggingface.co/datasets/Gourieff/ReActor/resolve/main/models/buffalo_l/det_10g.onnx" && \
-    wget -q -O /comfyui/models/insightface/models/buffalo_l/w600k_r50.onnx \
-    "https://huggingface.co/datasets/Gourieff/ReActor/resolve/main/models/buffalo_l/w600k_r50.onnx"
 
 # =============================================================
 # DIGER CUSTOM NODES
