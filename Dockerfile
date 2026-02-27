@@ -14,27 +14,26 @@ FROM runpod/worker-comfyui:5.7.1-flux1-schnell
 # 1. SYSTEM DEPENDENCIES
 # =============================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake && rm -rf /var/lib/apt/lists/*
+    build-essential cmake python3-dev && rm -rf /var/lib/apt/lists/*
 
 # =============================================================
 # 2. REACTOR (FACE SWAP) - Elle kurulum
 # =============================================================
 
-# InsightFace (onnxruntime base image'da zaten var)
-RUN pip install --no-cache-dir insightface
+# InsightFace
+RUN pip install --no-cache-dir insightface==0.7.3
 
 # ReActor klonla
 RUN cd /comfyui/custom_nodes && \
     git clone https://github.com/Gourieff/ComfyUI-ReActor.git
 
-# ReActor bagimliliklari (insightface zaten kurulu, tekrar kurma)
+# ReActor - TUM bagimliliklari requirements.txt'den kur
+# (eksik paket olursa ComfyUI node'u tamamen atlar!)
 RUN cd /comfyui/custom_nodes/ComfyUI-ReActor && \
-    pip install --no-cache-dir \
-    "albumentations>=1.4.16" \
-    "onnx>=1.14.0" \
-    "opencv-python>=4.7.0.72" \
-    segment_anything \
-    ultralytics
+    pip install --no-cache-dir -r requirements.txt
+
+# torchvision - ReActor icin gerekli, base image'da olmayabilir
+RUN pip install --no-cache-dir torchvision --extra-index-url https://download.pytorch.org/whl/cu121
 
 # =============================================================
 # 3. CUSTOM NODES
@@ -127,3 +126,8 @@ RUN mkdir -p /comfyui/models/controlnet && \
     "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/diffusers_xl_canny_mid.safetensors" && \
     wget -q -O /comfyui/models/controlnet/diffusers_xl_depth_mid.safetensors \
     "https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/diffusers_xl_depth_mid.safetensors"
+# ------------------------------------------------------------
+# Future model additions can be appended below this line
+
+# FIX: onnxruntime pip install sirasinda silinmis, ReActor icin zorunlu
+RUN pip install --no-cache-dir onnxruntime-gpu
