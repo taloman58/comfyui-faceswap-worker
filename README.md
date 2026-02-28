@@ -71,6 +71,8 @@ A production-ready RunPod Serverless worker that runs ComfyUI with ReActor face 
 - ✅ **Auto-Reconnect** — WebSocket reconnection with configurable retry logic
 - ✅ **Error Handling** — Detailed error messages with node-level diagnostics
 - ✅ **GIF/Video Output** — Handles both `images` and `gifs` output keys from ComfyUI
+- ✅ **Frame Flood Protection** — When video output exists, automatically skips uploading hundreds of individual frame images
+- ✅ **NSFW Model Pre-Downloaded** — ReActor's NSFW detection model is baked into the Docker image (no 328MB download on cold start)
 
 ---
 
@@ -243,6 +245,22 @@ The handler processes two types of outputs from ComfyUI nodes:
 - Supports `.mp4`, `.gif`, `.webm` extensions
 - Uploaded to R2 with correct content type
 
+#### Frame Flood Protection
+
+When a workflow has both `SaveImage` (producing individual frames) and `VHS_VideoCombine` (producing a combined video), the handler intelligently skips uploading individual frame images:
+
+- If any node produces video output (`gifs` key exists)
+- AND another node produces more than 10 images
+- Those images are treated as intermediate frames and **skipped**
+- Only the combined video file is uploaded to R2
+
+This prevents uploading hundreds of individual PNG frames (e.g., 386 frames for a 13-second video) when the user only wants the final video. The threshold of 10 images ensures small image batches are still uploaded normally.
+
+```
+WITHOUT protection: 386 PNGs + 1 MP4 = 387 uploads → slow, expensive
+WITH protection:    1 MP4 only = 1 upload → fast, clean
+```
+
 ### Error Handling
 
 The handler includes comprehensive error handling:
@@ -276,6 +294,12 @@ RUN pip install onnxruntime-gpu
 
 # Create model directories for symlinks
 RUN mkdir -p /comfyui/models/insightface ...
+
+# NSFW detection model pre-download (prevents 328MB download on cold start)
+RUN cd /comfyui/models/nsfw_detector/vit-base-nsfw-detector && \
+    wget -q .../config.json && \
+    wget -q .../model.safetensors && \
+    wget -q .../preprocessor_config.json
 
 # Copy custom handler and startup script
 COPY handler.py /handler.py
@@ -644,29 +668,41 @@ python main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch &
 
 ## Known Issues
 
-### 1. Video Output Not Downloaded to Local Machine
+### ~~1. Video Output Not Downloaded to Local Machine~~ ✅ FIXED
 
-**Status:** Open
+**Status:** Fixed (v5)
 
-When using the RunPod Worker node locally in ComfyUI, the processed **video file is not automatically saved** to the local machine. The video frames (as individual PNGs) are uploaded to Cloudflare R2 successfully, but the combined video output is not downloaded to the desktop.
+**Problem:** When a workflow had both `SaveImage` and `VHS_VideoCombine`, the handler uploaded 386 individual PNG frames + 1 MP4. This caused slow uploads, expensive storage, and local download timeouts.
 
-**Workaround:**
+**Fix:** Frame Flood Protection added to `handler.py`. When video output exists, frame images (>10 per node) are automatically skipped. Only the combined MP4 is uploaded to R2 and returned to the client.
 
-- Download the video directly from Cloudflare R2 bucket
-- Use the signed URLs returned in the API response
-- Check the R2 bucket for `.mp4` files in the job folder
+### ~~2. NSFW Detection Model Downloaded on Every Cold Start~~ ✅ FIXED
 
-### 2. NSFW Detection Model Downloaded on Every Cold Start
+**Status:** Fixed (v5)
 
-ReActor downloads a ~328 MB NSFW detection model on first run. This is cached within the container but lost on cold starts.
+**Problem:** ReActor downloads a ~328 MB NSFW detection model from HuggingFace on first run. This was lost on cold starts, causing ~2-3 minute delays.
 
-**Potential Fix:** Pre-download this model into the Docker image or Network Volume.
+**Fix:** Model is now pre-downloaded in the Dockerfile (`/comfyui/models/nsfw_detector/vit-base-nsfw-detector/`). Zero cold start download.
 
 ### 3. AnimateDiff Motion Models Not Found
+
+**Status:** Open
 
 Warning in logs: `No motion models found`. This doesn't affect face swap workflows but will affect animation workflows.
 
 **Fix:** Download motion models to `animatediff_models/` in Network Volume.
+
+### 4. Extra Workers Spawning
+
+**Status:** Platform Issue
+
+RunPod may spawn extra workers beyond the configured max, especially with FlashBoot enabled. These workers may appear as "throttled".
+
+**Workaround:**
+
+- Delete throttled workers manually from the dashboard
+- Consider disabling FlashBoot if extra worker costs are a concern
+- Reduce Idle Timeout to minimize unused worker time
 
 ---
 
