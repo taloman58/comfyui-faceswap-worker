@@ -103,4 +103,10 @@ RUN mkdir -p /comfyui/models/animatediff_models && \
     https://huggingface.co/guoyww/animatediff/resolve/main/mm_sd_v15_v2.ckpt && \
     echo 'AnimateDiff OK'
 
+# =============================================================
+# 8. PRO VIDEO FACE SWAP NODES
+# =============================================================
+RUN comfy-node-install comfyui-liveportraitkj
+RUN comfy-node-install comfyui_faceanalysis
+
 CMD ["/start.sh"]
