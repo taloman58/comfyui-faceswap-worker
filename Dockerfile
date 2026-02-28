@@ -109,4 +109,10 @@ RUN mkdir -p /comfyui/models/animatediff_models && \
 RUN comfy-node-install comfyui-liveportraitkj
 RUN comfy-node-install comfyui_faceanalysis
 
+# 8.1 YOLO face detection model (FaceDetailer icin)
+RUN mkdir -p /comfyui/models/ultralytics/bbox && \
+    wget -q -O /comfyui/models/ultralytics/bbox/face_yolov8m.pt \
+    https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8m.pt && \
+    echo 'YOLO face model OK'
+
 CMD ["/start.sh"]
