@@ -3,7 +3,7 @@
 # =============================================================
 FROM runpod/worker-comfyui:5.7.1-flux1-schnell
 
-# Kurulum sırasında interaktif ekranların çıkmasını engeller
+# Kurulum sirasinda interaktif ekranlarin cikmasini engeller
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Python headers ve C++ derleyiciler insightface paketinin derlenmesi icin zorunludur
@@ -49,15 +49,12 @@ RUN pip install --no-cache-dir onnxruntime-gpu
 # 4. MODEL KLASORLERINI OLUSTUR (symlink hedefleri)
 # =============================================================
 RUN mkdir -p /comfyui/models/insightface \
-    /comfyui/models/insightface/models/buffalo_l \
     /comfyui/models/facerestore_models \
     /comfyui/models/upscale_models \
     /comfyui/models/clip_vision \
     /comfyui/models/ipadapter \
     /comfyui/models/controlnet \
-    /comfyui/models/nsfw_detector/vit-base-nsfw-detector \
-    /comfyui/models/facedetection \
-    /comfyui/models/animatediff_models
+    /comfyui/models/nsfw_detector/vit-base-nsfw-detector
 
 # =============================================================
 # 4.1 NSFW DETECTION MODEL (~328MB)
@@ -69,43 +66,41 @@ RUN cd /comfyui/models/nsfw_detector/vit-base-nsfw-detector && \
     echo 'NSFW model OK'
 
 # =============================================================
-# 4.2 INSIGHTFACE BUFFALO_L (~282MB)
-# ReActor ilk calistirmada indiriyor, biz onceden koyuyoruz
-# =============================================================
-RUN cd /tmp && \
-    wget -q https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip && \
-    unzip -o buffalo_l.zip -d /comfyui/models/insightface/models/buffalo_l/ && \
-    rm buffalo_l.zip && \
-    echo 'buffalo_l OK'
-
-# =============================================================
-# 4.3 FACEXLIB + CODEFORMER PARSENET (~185MB)
-# CodeFormer face restore icin gerekli
-# =============================================================
-RUN wget -q -O /comfyui/models/facedetection/detection_Resnet50_Final.pth \
-    https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth && \
-    wget -q -O /comfyui/models/facedetection/parsing_parsenet.pth \
-    https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth && \
-    echo 'facexlib models OK'
-
-# =============================================================
-# 4.4 ANIMATEDIFF MOTION MODEL (~1.8GB)
-# =============================================================
-RUN wget -q -O /comfyui/models/animatediff_models/mm_sd_v15_v2.ckpt \
-    https://huggingface.co/guoyww/animatediff/resolve/main/mm_sd_v15_v2.ckpt && \
-    echo 'AnimateDiff motion model OK'
-
-
-# =============================================================
-# 5. HANDLER - VIDEO/GIF DESTEGI VE BUCKET_NAME FIX
+# 5. HANDLER
 # =============================================================
 COPY handler.py /handler.py
 
 # =============================================================
-# 6. NETWORK VOLUME ENTRYPOINT
-# Modeller /runpod-volume/models/ klasöründen symlink edilir
+# 6. STARTUP SCRIPT
 # =============================================================
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
+
+# =============================================================
+# 7. COLD START MODEL PRE-DOWNLOADS
+# En sonda — ustundeki tum layer'lar CACHE'den gelir
+# =============================================================
+
+# 7.1 InsightFace buffalo_l (~282MB)
+RUN mkdir -p /comfyui/models/insightface/models/buffalo_l && \
+    cd /tmp && \
+    wget -q https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip && \
+    python -m zipfile -e buffalo_l.zip /comfyui/models/insightface/models/buffalo_l/ && \
+    rm buffalo_l.zip && \
+    echo 'buffalo_l OK'
+
+# 7.2 Facexlib + CodeFormer (~185MB)
+RUN mkdir -p /comfyui/models/facedetection && \
+    wget -q -O /comfyui/models/facedetection/detection_Resnet50_Final.pth \
+    https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth && \
+    wget -q -O /comfyui/models/facedetection/parsing_parsenet.pth \
+    https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth && \
+    echo 'facexlib OK'
+
+# 7.3 AnimateDiff motion model (~1.8GB)
+RUN mkdir -p /comfyui/models/animatediff_models && \
+    wget -q -O /comfyui/models/animatediff_models/mm_sd_v15_v2.ckpt \
+    https://huggingface.co/guoyww/animatediff/resolve/main/mm_sd_v15_v2.ckpt && \
+    echo 'AnimateDiff OK'
 
 CMD ["/start.sh"]
