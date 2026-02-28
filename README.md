@@ -1,484 +1,708 @@
-<<<<<<< HEAD
-# 🎬 ComfyUI FaceSwap Worker — RunPod Serverless
+# ComfyUI Face Swap Worker for RunPod Serverless
 
-> **Run GPU-heavy ComfyUI workflows from any PC (no GPU needed) using RunPod Serverless.**  
-> Face swap, style transfer, video processing — fully automated via API.
+A production-ready RunPod Serverless worker that runs ComfyUI with ReActor face swap, video processing, and Cloudflare R2 output storage. Built on top of the official `runpod/worker-comfyui` base image with extensive customizations for face-swapping workflows.
 
-[![Docker Image](https://img.shields.io/badge/GHCR-ghcr.io%2Ftaloman58%2Fcomfyui--faceswap--worker-blue?logo=docker)](https://github.com/taloman58/comfyui-faceswap-worker/pkgs/container/comfyui-faceswap-worker)
-[![Base Image](https://img.shields.io/badge/Base-runpod%2Fworker--comfyui%3A5.7.1--flux1--schnell-orange)](https://hub.docker.com/r/runpod/worker-comfyui)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+> **Turkish documentation:** See [TR-README.md](./TR-README.md) for Turkish instructions.
 
 ---
 
-## 🌍 Language / Dil
+## Table of Contents
 
-- [🇬🇧 English](#-what-is-this) — Full documentation in English
-- [🇹🇷 Türkçe](#-bu-nedir) — Tam Türkçe dokümantasyon
+- [Architecture Overview](#architecture-overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Handler Deep Dive](#handler-deep-dive)
+- [Dockerfile Breakdown](#dockerfile-breakdown)
+- [start.sh — Startup Script](#startsh--startup-script)
+- [Network Volume Setup](#network-volume-setup)
+- [Environment Variables](#environment-variables)
+- [Cloudflare R2 Configuration](#cloudflare-r2-configuration)
+- [RunPod Endpoint Configuration](#runpod-endpoint-configuration)
+- [Sending Requests](#sending-requests)
+- [Output Handling](#output-handling)
+- [Custom Nodes Included](#custom-nodes-included)
+- [Models Required](#models-required)
+- [Troubleshooting](#troubleshooting)
+- [Known Issues](#known-issues)
+- [Building & Deploying](#building--deploying)
 
 ---
 
-## 🇬🇧 English
-
-### 🤔 What is This?
-
-This project lets you run **ComfyUI workflows on a powerful cloud GPU** (via RunPod Serverless) **from any computer** — even a low-end laptop with no GPU.
-
-You design your workflow on your local ComfyUI, add the **RunPodSender** custom node, press Queue — and the work happens on RunPod's GPU in the cloud. Results are automatically downloaded to your Desktop.
-
-**Architecture:**
+## Architecture Overview
 
 ```
-┌─────────────────────────┐        ┌──────────────────────────────┐
-│  Your Local PC          │  API   │  RunPod Serverless Worker    │
-│  (No GPU needed)        │──────► │  (24GB+ GPU)                 │
-│                         │        │                              │
-│  • ComfyUI installed    │        │  • This Docker image         │
-│  • Design workflows     │        │  • ComfyUI + all models      │
-│  • RunPodSender node    │◄───────│  • Returns results via API   │
-│  • Results on Desktop   │ Result │                              │
-└─────────────────────────┘        └──────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                   RunPod Worker                      │
+│                                                      │
+│  ┌──────────┐    ┌──────────┐    ┌───────────────┐  │
+│  │ start.sh │───▶│ ComfyUI  │    │  handler.py   │  │
+│  │          │    │ (bg)     │◄──▶│  (main proc)  │  │
+│  │ symlinks │    │ :8188    │ WS │               │  │
+│  │ models   │    └──────────┘    └───────┬───────┘  │
+│  └──────────┘                            │          │
+│                                          │          │
+│  ┌──────────────────┐          ┌─────────▼────────┐ │
+│  │ Network Volume   │          │ Cloudflare R2    │ │
+│  │ /runpod-volume/  │          │ (S3-compatible)  │ │
+│  │ models/          │          │ comfyui-output   │ │
+│  └──────────────────┘          └──────────────────┘ │
+└─────────────────────────────────────────────────────┘
 ```
 
-### ✨ What Can You Do?
+**Flow:**
 
-| Workflow                       | Use Case                                        |
-| ------------------------------ | ----------------------------------------------- |
-| 🎭 **Face Swap (Video)**       | Swap any face in a video with ReActor           |
-| 🎨 **Style Transfer (SDXL)**   | Change clothing/style with IP-Adapter           |
-| 🖼️ **Image Generation (FLUX)** | Ultra-fast image generation with FLUX.1 Schnell |
-| 📐 **Upscaling**               | 4x upscale with RealESRGAN or UltraSharp        |
-| 🎬 **Video Animation**         | Create video animations with AnimateDiff        |
-
-### 📦 What's Inside the Docker Image?
-
-**Base:** `runpod/worker-comfyui:5.7.1-flux1-schnell`
-
-#### Custom Nodes (11 total)
-
-| Node                    | Purpose                                    |
-| ----------------------- | ------------------------------------------ |
-| **ReActor**             | Face swap for images and videos            |
-| **IP-Adapter Plus**     | Style / clothing / face reference transfer |
-| **Video Helper Suite**  | Load and save videos (with ffmpeg)         |
-| **AnimateDiff Evolved** | Video animation generation                 |
-| **Frame Interpolation** | Smooth frame-to-frame transitions          |
-| **Ultimate SD Upscale** | Smart 4x upscaling                         |
-| **Impact Pack**         | SAM segmentation + masking                 |
-| **Advanced ControlNet** | Pose / edge / depth control                |
-| **KJNodes**             | Batch processing, utility tools            |
-| **Essentials**          | Core processing tools                      |
-| **WAS Node Suite**      | Image processing, filters, text            |
-
-#### Pre-downloaded Models (~35GB total)
-
-| Model                  | Size   | Purpose                                            |
-| ---------------------- | ------ | -------------------------------------------------- |
-| FLUX.1 Schnell         | ~12GB  | Ultra-fast image generation                        |
-| SDXL Base 1.0          | ~6.5GB | Controlled generation with IP-Adapter / ControlNet |
-| inswapper_128.onnx     | ~530MB | Face swap engine                                   |
-| CodeFormer             | ~375MB | Face quality enhancement                           |
-| GFPGANv1.4             | ~332MB | Face restoration                                   |
-| RealESRGAN x4+         | ~64MB  | 4x upscaling                                       |
-| 4x-UltraSharp          | ~64MB  | 4x sharp upscaling                                 |
-| CLIP Vision (ViT-H-14) | ~2.4GB | IP-Adapter image encoder                           |
-| IP-Adapter Plus Face   | ~808MB | Face style transfer                                |
-| IP-Adapter Plus        | ~808MB | Style / clothing transfer                          |
-| ControlNet Canny       | ~520MB | Edge preservation                                  |
-| ControlNet Depth       | ~520MB | Depth / pose preservation                          |
+1. `start.sh` runs on container startup
+2. Models are symlinked from Network Volume → ComfyUI models directory
+3. ComfyUI starts in the background on port 8188
+4. `handler.py` starts and waits for ComfyUI API to be reachable
+5. When a job arrives, handler uploads input images, queues the workflow, waits for completion
+6. Output images/videos are uploaded to Cloudflare R2 (or returned as base64)
 
 ---
 
-### 🚀 Setup from Scratch
+## Features
 
-#### Prerequisites
-
-- Any Windows/Mac/Linux PC (no GPU needed for the local side)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) installed locally
-- [RunPod account](https://runpod.io) (~$15 credit is plenty)
-- [GitHub account](https://github.com)
+- ✅ **ReActor Face Swap** — High-quality face swapping using InsightFace
+- ✅ **Video Processing** — Frame-by-frame face swap on video files
+- ✅ **Cloudflare R2 Upload** — Automatic output upload with signed URLs
+- ✅ **Network Volume Support** — Models stored on persistent network storage
+- ✅ **WebSocket Monitoring** — Real-time workflow progress tracking
+- ✅ **Auto-Reconnect** — WebSocket reconnection with configurable retry logic
+- ✅ **Error Handling** — Detailed error messages with node-level diagnostics
+- ✅ **GIF/Video Output** — Handles both `images` and `gifs` output keys from ComfyUI
 
 ---
 
-#### Step 1 — Clone This Repo
+## Quick Start
+
+### 1. Build the Docker Image
 
 ```bash
-git clone https://github.com/taloman58/comfyui-faceswap-worker.git
-cd comfyui-faceswap-worker
-```
-
----
-
-#### Step 2 — Build the Docker Image Locally
-
-> ⚠️ The base image is ~32GB. First pull takes a long time on a slow connection.
-
-```powershell
-# Pull the base image once (saves to your local Docker cache)
-docker pull runpod/worker-comfyui:5.7.1-flux1-schnell
-
-# Build your image (first time: 30-60 min for model downloads)
-docker build -t ghcr.io/YOUR_GITHUB_USERNAME/comfyui-faceswap-worker:latest .
-```
-
-> 💡 After the first build, subsequent builds only reprocess changed layers — takes 2-3 minutes only!
-
----
-
-#### Step 3 — Push to GitHub Container Registry (GHCR)
-
-```bash
-# Create a GitHub Personal Access Token:
-# github.com/settings/tokens → New classic token → check: write:packages, read:packages
-
-echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-docker push ghcr.io/YOUR_GITHUB_USERNAME/comfyui-faceswap-worker:latest
-```
-
-> ⚠️ **Make the image public:** Go to `github.com/YOUR_USERNAME` → Packages → Select the package → Package settings → Change visibility → **Public**  
-> RunPod cannot pull private images without extra authentication.
-
----
-
-#### Step 4 — Create RunPod Endpoint
-
-1. **RunPod → My Templates → New Template:**
-   - Template Name: `comfyui-faceswap-worker`
-   - Template Type: `Serverless`
-   - Container Image: `ghcr.io/YOUR_USERNAME/comfyui-faceswap-worker:latest`
-   - Container Disk: `50 GB`
-
-2. **RunPod → Serverless → New Endpoint:**
-   - Template: select the one you just created
-   - GPU: `24 GB+` (RTX 4090, A5000, L40S)
-   - Active Workers: `0` ← **IMPORTANT: keeps cost at $0 when idle**
-   - Max Workers: `1`
-   - Flash Boot: `enabled`
-
-3. Copy your **Endpoint ID** (looks like `wheryrlbvhl8u6`)
-
----
-
-#### Step 5 — Set Up Local ComfyUI
-
-Install the required custom nodes in your local ComfyUI:
-
-```bash
-cd /path/to/ComfyUI/custom_nodes/
-
-# ReActor (for local preview/design)
-git clone https://github.com/Gourieff/ComfyUI-ReActor.git
-
-# Video Helper Suite
-git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
-
-# ffmpeg support (for video)
-pip install imageio-ffmpeg
-```
-
-**Install the RunPodSender node** (from this repo):
-
-```bash
-# Copy the custom_nodes/ComfyUI-RunPod-Worker folder to your ComfyUI custom_nodes directory
-```
-
-Then restart ComfyUI. You'll see a new **"RunPod'a Gonder"** node in the `RunPod` category.
-
----
-
-#### Step 6 — Load the Workflow and Run
-
-1. Open ComfyUI
-2. Load `workflows/faceswap.json` (from this repo)
-3. Upload your **source face** image as `source_face.jpg` in the ComfyUI input folder
-4. Upload your **target video** as `input_video.mp4` in the ComfyUI input folder
-5. Set your RunPod **API Key** and **Endpoint ID** in the RunPodSender node
-6. Click **Queue Prompt**
-
-Results appear automatically in `Desktop/RunPod/` folder!
-
----
-
-### 🔄 Adding New Nodes or Models (Fast!)
-
-Thanks to Docker layer cache, updates only take **2-3 minutes** after the first build.
-
-> ⚠️ **Always add new things at the BOTTOM of the Dockerfile!** Adding in the middle invalidates all layers below it.
-
-**Add a new ComfyUI node:**
-
-```dockerfile
-# At the bottom of Dockerfile
-RUN comfy-node-install new-node-name
-```
-
-**Add a new model:**
-
-```dockerfile
-# At the bottom of Dockerfile
-RUN wget -q -O /comfyui/models/FOLDER/model.safetensors \
-    "https://huggingface.co/EXAMPLE/resolve/main/model.safetensors"
-```
-
-**Then rebuild and push:**
-
-```powershell
 docker build -t ghcr.io/YOUR_USERNAME/comfyui-faceswap-worker:latest .
+```
+
+### 2. Push to Registry
+
+```bash
 docker push ghcr.io/YOUR_USERNAME/comfyui-faceswap-worker:latest
-# RunPod: Endpoint → Manage → New Release → Deploy
+```
+
+### 3. Create RunPod Endpoint
+
+1. Go to [RunPod Serverless](https://www.runpod.io/console/serverless)
+2. Click **New Endpoint**
+3. Set the container image: `ghcr.io/YOUR_USERNAME/comfyui-faceswap-worker:latest`
+4. Select GPU: RTX 3090 or higher recommended
+5. Attach a Network Volume for models (see [Network Volume Setup](#network-volume-setup))
+6. Set Environment Variables (see [Environment Variables](#environment-variables))
+7. Set Execution Timeout: **1200 seconds** (20 minutes recommended)
+8. Enable FlashBoot for faster cold starts
+
+### 4. Send a Test Request
+
+```bash
+curl -X POST "https://api.runpod.ai/v2/YOUR_ENDPOINT_ID/runsync" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "workflow": { ... },
+      "images": [
+        {
+          "name": "source_face.jpg",
+          "image": "BASE64_ENCODED_IMAGE"
+        }
+      ]
+    }
+  }'
 ```
 
 ---
 
-### 💰 Cost Estimates
+## Project Structure
 
-| Situation                     | Cost        |
-| ----------------------------- | ----------- |
-| Idle (Active Workers = 0)     | **$0.00**   |
-| 1 face swap (~10s GPU)        | ~$0.005     |
-| 1 image generation (~30s GPU) | ~$0.01–0.02 |
-| 1 min video face swap         | ~$0.05–0.10 |
-| GHCR + GitHub (public)        | **$0.00**   |
-| Local Docker build            | **$0.00**   |
-
-> ⚠️ **Keep Active Workers at 0!** Setting it to 1 means the worker runs 24/7, costing ~$5–12/day.
-
----
-
-### 🐛 Troubleshooting
-
-| Problem                            | Solution                                                          |
-| ---------------------------------- | ----------------------------------------------------------------- |
-| `node XYZ does not exist`          | Force update on RunPod: Endpoint → Manage → New Release → Deploy  |
-| `No valid ffmpeg found` (local)    | Run `pip install imageio-ffmpeg` then restart ComfyUI             |
-| `buffalo_l` model missing          | ReActor downloads it automatically on first run — normal behavior |
-| `broken pipe` during push          | Re-run `docker push`, it resumes from where it stopped            |
-| `Layer already exists` during push | Normal! Base image layers are already on GHCR                     |
-| `manifest unknown` on RunPod       | Make the GHCR image **Public**                                    |
-| First build takes forever          | First run `docker pull runpod/worker-comfyui:5.7.1-flux1-schnell` |
+```
+comfyui-faceswap-worker/
+├── Dockerfile           # Multi-stage build with all dependencies
+├── handler.py           # Main RunPod serverless handler (927 lines)
+├── start.sh             # Container startup script (model linking + ComfyUI launch)
+├── README.md            # This file (English)
+├── TR-README.md         # Turkish documentation
+├── runpod.json          # RunPod configuration
+├── runpod-test.json     # Test payload
+└── workflows/           # Example ComfyUI workflow JSON files
+```
 
 ---
 
-### 📁 Model Folder Reference
+## Handler Deep Dive
 
-| Type              | Path in Container                     |
-| ----------------- | ------------------------------------- |
-| Checkpoint / UNET | `/comfyui/models/checkpoints/`        |
-| LoRA              | `/comfyui/models/loras/`              |
-| VAE               | `/comfyui/models/vae/`                |
-| ControlNet        | `/comfyui/models/controlnet/`         |
-| Upscale           | `/comfyui/models/upscale_models/`     |
-| Face Swap         | `/comfyui/models/insightface/`        |
-| Face Restore      | `/comfyui/models/facerestore_models/` |
-| IP-Adapter        | `/comfyui/models/ipadapter/`          |
-| CLIP Vision       | `/comfyui/models/clip_vision/`        |
-| AnimateDiff       | `/comfyui/models/animatediff_models/` |
+The `handler.py` file is the core of this worker. It handles the complete lifecycle of a RunPod serverless job.
+
+### Key Constants
+
+| Constant                          | Default          | Description                               |
+| --------------------------------- | ---------------- | ----------------------------------------- |
+| `COMFY_HOST`                      | `127.0.0.1:8188` | ComfyUI server address                    |
+| `COMFY_API_AVAILABLE_MAX_RETRIES` | `500`            | Max attempts to check if ComfyUI is ready |
+| `COMFY_API_AVAILABLE_INTERVAL_MS` | `50`             | Delay between retries (ms)                |
+| `WEBSOCKET_RECONNECT_ATTEMPTS`    | `5`              | WebSocket reconnection attempts           |
+| `WEBSOCKET_RECONNECT_DELAY_S`     | `3`              | Delay between reconnection attempts (s)   |
+| `REFRESH_WORKER`                  | `false`          | Reset worker state after each job         |
+
+### Main Functions
+
+#### `handler(job)` — Main Entry Point (Line ~400)
+
+The RunPod serverless handler function. Called for every incoming job.
+
+**Flow:**
+
+1. Validates input (workflow JSON + optional images)
+2. Checks if ComfyUI API is reachable at `http://127.0.0.1:8188/`
+3. Uploads input images to ComfyUI via `/upload/image` endpoint
+4. Connects to WebSocket at `ws://127.0.0.1:8188/ws?clientId=<uuid>`
+5. Queues the workflow via `/prompt` API
+6. Monitors execution via WebSocket messages
+7. Fetches output from `/history/<prompt_id>`
+8. Processes outputs (images and gifs/videos)
+9. Uploads to Cloudflare R2 or encodes as base64
+10. Returns result to RunPod
+
+#### `validate_input(job_input)` — Input Validation (Line 142)
+
+Validates the incoming job payload:
+
+- Checks for `workflow` key (required)
+- Validates `images` array format (optional)
+- Extracts `comfy_org_api_key` if provided
+
+**Expected Input Format:**
+
+```json
+{
+  "workflow": { "ComfyUI API format workflow JSON" },
+  "images": [
+    {
+      "name": "filename.jpg",
+      "image": "base64_encoded_data_or_url"
+    }
+  ]
+}
+```
+
+#### `check_server(url, retries, delay)` — Server Health Check (Line 191)
+
+Polls the ComfyUI HTTP API until it responds with status 200.
+
+- Default: 500 retries × 50ms = ~25 seconds max wait
+- Logs success/failure to stdout
+
+#### `upload_images(images)` — Image Upload (Line 227)
+
+Uploads base64-encoded images to ComfyUI's `/upload/image` endpoint.
+
+- Supports data URI prefix stripping
+- Handles both base64 strings and HTTP URLs
+- Reports per-image success/failure
+
+#### `queue_workflow(workflow)` — Workflow Submission (Line ~350)
+
+Sends the workflow JSON to ComfyUI's `/prompt` endpoint.
+
+- Returns the `prompt_id` for tracking
+- Captures and reports validation errors from ComfyUI
+
+#### `get_history(prompt_id)` — History Retrieval (Line ~400)
+
+Fetches completed workflow results from `/history/<prompt_id>`.
+
+#### `get_image_data(filename, subfolder, folder_type)` — Image Data Fetch (Line ~420)
+
+Downloads processed images from ComfyUI's `/view` endpoint.
+
+- Parameters match ComfyUI's output format (filename, subfolder, type)
+- Returns raw bytes
+
+### Output Processing (Lines 700-920)
+
+The handler processes two types of outputs from ComfyUI nodes:
+
+#### Images (`node_output["images"]`)
+
+- Each image is fetched via `/view` endpoint
+- Temp images (type="temp") are skipped
+- If `BUCKET_ENDPOINT_URL` is set → uploaded to Cloudflare R2
+- Otherwise → encoded as base64
+
+#### Videos/GIFs (`node_output["gifs"]`)
+
+- Same logic as images but for video outputs
+- ComfyUI stores video outputs under the `gifs` key
+- Supports `.mp4`, `.gif`, `.webm` extensions
+- Uploaded to R2 with correct content type
+
+### Error Handling
+
+The handler includes comprehensive error handling:
+
+- **WebSocket disconnects**: Auto-reconnect with configurable retries
+- **ComfyUI crashes**: Detected via HTTP health check during reconnect
+- **Upload failures**: Individual file errors don't stop processing
+- **Workflow errors**: ComfyUI validation errors are captured and returned
 
 ---
 
-## 🇹🇷 Türkçe
+## Dockerfile Breakdown
 
-### 🤔 Bu Nedir?
+```dockerfile
+FROM runpod/worker-comfyui:5.7.1-flux1-schnell   # Base image with ComfyUI
 
-Bu proje, **GPU'suz bir bilgisayardan** (dizüstü, ofis PC, fark etmez) **RunPod Serverless** üzerindeki güçlü cloud GPU'lara ComfyUI workflow'u göndermenizi sağlar.
+# System dependencies for InsightFace compilation
+RUN apt-get update && apt-get install -y build-essential cmake python3-dev
 
-Lokal ComfyUI'de workflow tasarlıyorsunuz, **RunPodSender** node'unu ekliyorsunuz, Queue'ya basıyorsunuz — işlem buluttaki GPU'da yapılıyor, sonuçlar otomatik olarak bilgisayarınıza iniyor.
+# ReActor face swap node
+RUN pip install insightface==0.7.3
+RUN cd /comfyui/custom_nodes && git clone ComfyUI-ReActor
 
-### ✨ Ne Yapabilirsiniz?
+# Additional custom nodes (11 total)
+RUN comfy-node-install comfyui_ipadapter_plus
+RUN comfy-node-install comfyui-videohelpersuite
+# ... (see Dockerfile for full list)
 
-| Workflow                      | Kullanım                                  |
-| ----------------------------- | ----------------------------------------- |
-| 🎭 **Yüz Değiştirme (Video)** | ReActor ile video/resimdeki yüzü değiştir |
-| 🎨 **Stil Transferi**         | IP-Adapter ile kıyafet/stil değiştir      |
-| 🖼️ **Resim Üretimi**          | FLUX.1 Schnell ile ultra hızlı resim üret |
-| 📐 **Büyütme**                | RealESRGAN veya UltraSharp ile 4x büyüt   |
-| 🎬 **Video Animasyon**        | AnimateDiff ile video animasyonu oluştur  |
+# ONNX Runtime for ReActor
+RUN pip install onnxruntime-gpu
 
-### 🚀 Kurulum (Adım Adım)
+# Create model directories for symlinks
+RUN mkdir -p /comfyui/models/insightface ...
 
-Yukarıdaki İngilizce kılavuzu takip edin — tüm komutlar Windows için de geçerlidir.
-
-**Kısaca:**
-
-1. Bu repoyu klonla
-2. Docker ile image build et (`docker build ...`)
-3. GHCR'ye push et (`docker push ...`) ve **Public** yap
-4. RunPod'da template + endpoint oluştur (Active Workers: **0**)
-5. Lokal ComfyUI'ye `ComfyUI-RunPod-Worker` node'unu ekle
-6. `workflows/faceswap.json` workflow'unu yükle
-7. API key ve endpoint ID gir → Queue!
-
-### ⚠️ Önemli Notlar
-
-- **GitHub Actions KULLANILMIYOR** — lokal Docker build daha hızlı ve kontrollü
-- Dockerfile'a yeni şey eklerken daima **SONA ekle** (cache koruması)
-- **Active Workers = 0 olmalı** — 1 yaparsan 7/24 para keser (~$5-12/gün)
-- `buffalo_l` modeli ilk çalışmada otomatik indirilir — normal davranış
-- Push sırasında `broken pipe` hatası → tekrar çalıştır, kaldığı yerden devam eder
+# Copy custom handler and startup script
+COPY handler.py /handler.py
+COPY start.sh /start.sh
+CMD ["/start.sh"]
+```
 
 ---
 
-## 📜 License
+## start.sh — Startup Script
 
-MIT License — Use freely, attribution appreciated.
+The startup script performs three critical tasks:
 
-## 🙏 Credits
+### 1. Model Symlink from Network Volume
 
-- [RunPod](https://runpod.io) — Serverless GPU infrastructure
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) — Base workflow engine
-- [ReActor](https://github.com/Gourieff/ComfyUI-ReActor) — Face swap node
-- [worker-comfyui](https://github.com/blib-la/runpod-worker-comfyui) — Base Docker image
-=======
-🚀 ComfyUI FaceSwap Worker for RunPod Serverless
+```bash
+# For each model category (checkpoints, insightface, facerestore, etc.)
+ln -sf /runpod-volume/models/checkpoints/* /comfyui/models/checkpoints/
+```
 
+### 2. ComfyUI Background Launch
 
+```bash
+cd /comfyui
+python main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch &
+```
 
+### 3. Handler Start
 
+```bash
+exec python /handler.py
+```
 
+> **Important:** ComfyUI MUST be started before handler.py. The original base image's CMD is overridden, so we explicitly start ComfyUI in the background.
 
-Design your workflows locally. Generate in the cloud. Pay only for execution time.
+---
 
-This project lets you run ComfyUI on your local machine (no GPU required) while offloading all heavy processing to a RunPod Serverless GPU endpoint (e.g., RTX 4090).
+## Network Volume Setup
 
-When you hit “Queue Prompt”, your workflow is automatically sent to RunPod. Once processing is complete, the generated image or video is instantly returned to your local machine.
+### Why Network Volume?
 
-With Active Workers set to 0, you pay $0 when idle.
+- Models (7+ GB) don't need to be baked into the Docker image
+- Faster cold starts (no model re-download)
+- Easy model updates without rebuilding the image
 
-🏗️ Why Use This?
+### Setup Steps
 
-💻 Build and design workflows on your local PC
+1. **Create Network Volume** on RunPod Dashboard → Storage
+2. **Region:** Must match your endpoint region (e.g., `EU-CZ-1`)
+3. **Create Directories:**
+   ```bash
+   mkdir -p /runpod-volume/models/{checkpoints,insightface,facerestore_models,upscale_models,clip_vision,ipadapter,controlnet}
+   ```
+4. **Download Models** (see [Models Required](#models-required))
+5. **Attach to Endpoint:** Edit Endpoint → Advanced → Network Volume
 
-⚡ Leverage high-end cloud GPUs only when needed
+### Volume Mount Path
 
-💸 Zero idle cost (Serverless architecture)
+- Endpoint workers mount at: `/runpod-volume/`
+- Temporary pods mount at: `/workspace/` (maps to same volume)
 
-🔄 Seamless send-and-return workflow integration
+---
 
-🎯 No need to keep a GPU running 24/7
+## Environment Variables
 
-You keep full control locally — the cloud only activates when you press the button.
+### Required (for R2 Upload)
 
-📦 Included Models & Nodes
+| Variable                   | Example                                 | Description     |
+| -------------------------- | --------------------------------------- | --------------- |
+| `BUCKET_ENDPOINT_URL`      | `https://XXXX.r2.cloudflarestorage.com` | R2 endpoint URL |
+| `BUCKET_ACCESS_KEY_ID`     | `267a26bd...`                           | R2 access key   |
+| `BUCKET_SECRET_ACCESS_KEY` | `e24414a8...`                           | R2 secret key   |
+| `BUCKET_NAME`              | `comfyui-output`                        | R2 bucket name  |
 
-This container comes preloaded with approximately 35GB of models, ready to go:
+### Optional
 
-🎭 Face & Restoration
+| Variable                       | Default | Description                 |
+| ------------------------------ | ------- | --------------------------- |
+| `REFRESH_WORKER`               | `false` | Reset worker after each job |
+| `WEBSOCKET_RECONNECT_ATTEMPTS` | `5`     | Max WS reconnect attempts   |
+| `WEBSOCKET_RECONNECT_DELAY_S`  | `3`     | Delay between reconnects    |
+| `WEBSOCKET_TRACE`              | `false` | Enable verbose WS logging   |
+| `NETWORK_VOLUME_DEBUG`         | `false` | Enable volume diagnostics   |
 
-ReActor FaceSwap
+---
 
-inswapper_128
+## Cloudflare R2 Configuration
 
-GFPGAN
+### Setting Up R2
 
-CodeFormer
+1. Go to Cloudflare Dashboard → R2
+2. Create a bucket: `comfyui-output`
+3. Create an API Token with read/write access
+4. Note the endpoint URL, access key, and secret key
 
-🎬 Video & Animation
+### How It Works
 
-AnimateDiff Evolved
+When `BUCKET_ENDPOINT_URL` is set in the environment:
 
-🎨 Style & Conditioning
+1. Handler writes output to a temporary file
+2. Uses `rp_upload.upload_image()` to upload to R2
+3. Passes `bucket_name` from `BUCKET_NAME` env var
+4. Returns a signed URL valid for 7 days
+5. Temporary file is deleted after upload
 
-IP-Adapter Plus (SDXL compatible)
+If `BUCKET_ENDPOINT_URL` is NOT set:
 
-ControlNet
+- Outputs are returned as base64-encoded strings in the response
+- ⚠️ Large videos can exceed RunPod's response size limits
 
-Canny (SDXL)
+---
+
+## RunPod Endpoint Configuration
+
+### Recommended Settings
+
+| Setting           | Value           | Reason                             |
+| ----------------- | --------------- | ---------------------------------- |
+| GPU               | RTX 3090 (24GB) | SDXL + ReActor needs ~16GB VRAM    |
+| Execution Timeout | 1200s (20 min)  | Video processing can take 5-10 min |
+| FlashBoot         | Enabled         | Reduces cold start to ~2 seconds   |
+| Max Workers       | 2               | Adjust based on demand             |
+| Active Workers    | 0               | Scale to zero when idle            |
+| Network Volume    | Attached        | Required for models                |
+
+### Releasing Updates
+
+After pushing a new Docker image:
+
+1. Go to Endpoint → **Manage** → **New Release**
+2. Wait for workers to pull the new image
+3. Version number increments automatically
+4. Old workers must be terminated to pick up new image
+
+---
+
+## Sending Requests
+
+### Basic Image Face Swap
+
+```python
+import requests
+import base64
+
+API_KEY = "your_runpod_api_key"
+ENDPOINT_ID = "your_endpoint_id"
+
+# Read and encode the source face
+with open("face.jpg", "rb") as f:
+    face_b64 = base64.b64encode(f.read()).decode()
+
+# Read and encode the target image
+with open("target.jpg", "rb") as f:
+    target_b64 = base64.b64encode(f.read()).decode()
+
+payload = {
+    "input": {
+        "workflow": { ... },  # Your ComfyUI API-format workflow
+        "images": [
+            {"name": "source_face.jpg", "image": face_b64},
+            {"name": "target.jpg", "image": target_b64}
+        ]
+    }
+}
+
+response = requests.post(
+    f"https://api.runpod.ai/v2/{ENDPOINT_ID}/run",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    json=payload
+)
+
+job_id = response.json()["id"]
+print(f"Job submitted: {job_id}")
+```
+
+### Video Face Swap
+
+```python
+# Same as above, but with a video file
+with open("video.mp4", "rb") as f:
+    video_b64 = base64.b64encode(f.read()).decode()
+
+payload = {
+    "input": {
+        "workflow": { ... },
+        "images": [
+            {"name": "source_face.jpg", "image": face_b64},
+            {"name": "input_video.mp4", "image": video_b64}
+        ]
+    }
+}
+```
+
+### Checking Job Status
+
+```python
+status_response = requests.get(
+    f"https://api.runpod.ai/v2/{ENDPOINT_ID}/status/{job_id}",
+    headers={"Authorization": f"Bearer {API_KEY}"}
+)
+
+result = status_response.json()
+if result["status"] == "COMPLETED":
+    images = result["output"]["images"]
+    for img in images:
+        if img["type"] == "s3_url":
+            print(f"Download: {img['data']}")
+        elif img["type"] == "base64":
+            # Decode and save
+            data = base64.b64decode(img["data"])
+            with open(img["filename"], "wb") as f:
+                f.write(data)
+```
+
+---
+
+## Output Handling
+
+### Response Format
+
+```json
+{
+  "status": "COMPLETED",
+  "output": {
+    "images": [
+      {
+        "filename": "faceswap_preview_00001_.png",
+        "type": "s3_url",
+        "data": "https://XXXX.r2.cloudflarestorage.com/comfyui-output/JOB_ID/HASH.png?X-Amz-..."
+      },
+      {
+        "filename": "output_video.mp4",
+        "type": "s3_url",
+        "data": "https://XXXX.r2.cloudflarestorage.com/comfyui-output/JOB_ID/HASH.mp4?X-Amz-..."
+      }
+    ]
+  }
+}
+```
 
-Depth (SDXL)
+### Output Types
 
-🧠 Base Models
+| Type     | When                         | Description                            |
+| -------- | ---------------------------- | -------------------------------------- |
+| `s3_url` | `BUCKET_ENDPOINT_URL` is set | Signed URL to R2 bucket (7-day expiry) |
+| `base64` | No bucket configured         | Base64-encoded file data               |
 
-FLUX.1 Schnell
+---
 
-SDXL Base 1.0
+## Custom Nodes Included
 
-Upscalers
+| Node                            | Purpose                             |
+| ------------------------------- | ----------------------------------- |
+| **ComfyUI-ReActor**             | Face swapping with InsightFace      |
+| **comfyui-ipadapter-plus**      | IP-Adapter for style/face transfer  |
+| **comfyui-videohelpersuite**    | Video loading and saving            |
+| **comfyui-animatediff-evolved** | AnimateDiff for video generation    |
+| **comfyui-frame-interpolation** | Frame interpolation (FILM/RIFE)     |
+| **comfyui-ultimatesdupscale**   | Ultimate SD Upscale                 |
+| **comfyui-impact-pack**         | Detection, segmentation, refinement |
+| **comfyui-advanced-controlnet** | Advanced ControlNet features        |
+| **comfyui-kjnodes**             | Utility nodes                       |
+| **comfyui-essentials**          | Essential utility nodes             |
+| **was-node-suite-comfyui**      | 220+ utility nodes                  |
 
-Everything is pre-installed inside the Docker image — no additional setup required inside the container.
+---
 
-🚀 Setup Guide
-Step 1 — Make Your Docker Image Public
+## Models Required
 
-Publish this repository’s Docker image to GitHub Container Registry.
+Store these in your Network Volume under `/runpod-volume/models/`:
 
-Ensure the package visibility is set to Public (RunPod cannot pull private images).
+### Checkpoints
 
-Copy your image URL, for example:
+| Model          | Path                                     | Size   |
+| -------------- | ---------------------------------------- | ------ |
+| SD XL Base 1.0 | `checkpoints/sd_xl_base_1.0.safetensors` | 6.9 GB |
 
-ghcr.io/yourusername/comfyui-faceswap-worker:latest
-Step 2 — Create a RunPod Serverless Endpoint
+### InsightFace
 
-Go to RunPod Console → Serverless → My Templates
+| Model         | Path                             | Size   |
+| ------------- | -------------------------------- | ------ |
+| inswapper_128 | `insightface/inswapper_128.onnx` | 554 MB |
 
-Click New Template
+### Face Restore
 
-Container Image: Your GitHub image URL
+| Model      | Path                                       | Size   |
+| ---------- | ------------------------------------------ | ------ |
+| GFPGANv1.3 | `facerestore_models/GFPGANv1.3.pth`        | 348 MB |
+| GFPGANv1.4 | `facerestore_models/GFPGANv1.4.pth`        | 348 MB |
+| CodeFormer | `facerestore_models/codeformer-v0.1.0.pth` | 376 MB |
 
-Container Disk Size: 50 GB
+### Upscale
 
-Go to Serverless → New Endpoint
+| Model          | Path                                   | Size  |
+| -------------- | -------------------------------------- | ----- |
+| 4x-UltraSharp  | `upscale_models/4x-UltraSharp.pth`     | 67 MB |
+| RealESRGAN x4+ | `upscale_models/RealESRGAN_x4plus.pth` | 67 MB |
 
-Select your template
+### CLIP Vision
 
-Enable FlashBoot
+| Model         | Path                                                      | Size   |
+| ------------- | --------------------------------------------------------- | ------ |
+| CLIP-ViT-H-14 | `clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors` | 3.9 GB |
 
-Set:
+### IP-Adapter
 
-Max Workers = 1
+| Model                     | Path                                                    | Size   |
+| ------------------------- | ------------------------------------------------------- | ------ |
+| IP-Adapter Plus Face SDXL | `ipadapter/ip-adapter-plus-face_sdxl_vit-h.safetensors` | 847 MB |
 
-Active Workers = 0 ⚠️ (Important — prevents idle charges)
+### ControlNet
 
-Your endpoint is now ready.
+| Model     | Path                                            | Size   |
+| --------- | ----------------------------------------------- | ------ |
+| Canny Mid | `controlnet/diffusers_xl_canny_mid.safetensors` | 2.5 GB |
+| Depth Mid | `controlnet/diffusers_xl_depth_mid.safetensors` | 2.5 GB |
 
-Step 3 — Connect Your Local ComfyUI
+---
 
-Install and run your local ComfyUI.
+## Troubleshooting
 
-Add the custom RunPod Sender Node to your workflow.
+### "Failed to connect to server at http://127.0.0.1:8188/ after 500 attempts"
 
-Enter:
+**Cause:** ComfyUI is not starting. This happens when `start.sh` doesn't launch ComfyUI before `handler.py`.
 
-Your RunPod API Key
+**Fix:** Ensure `start.sh` contains:
 
-Your Endpoint ID (found in the endpoint URL)
+```bash
+cd /comfyui
+python main.py --listen 0.0.0.0 --port 8188 --disable-auto-launch &
+```
 
-Load your image or video.
+### "NoSuchBucket" Error on R2 Upload
 
-Click Queue Prompt.
+**Cause:** `BUCKET_NAME` not set or incorrect.
 
-Your workflow runs in the cloud GPU.
-The output returns automatically to your local machine.
+**Fix:** Add `BUCKET_NAME=comfyui-output` to RunPod endpoint environment variables.
 
-💡 How It Works (Simple Flow)
+### Worker Stuck in "Throttled" State
 
-Local ComfyUI → RunPod Serverless GPU → Result Returned Locally
+**Cause:** Worker failed health checks too many times.
 
-No persistent GPU instance.
-No idle billing.
-Full power on demand.
+**Fix:**
 
-🎯 Ideal For
+1. Delete throttled workers
+2. Check container logs for errors
+3. If persistent, do a New Release to force fresh image pull
 
-Developers without a local GPU
+### Execution Timeout
 
-Creators who want RTX 4090 power only when needed
+**Cause:** Default timeout (600s) too short for video processing.
 
-FaceSwap & AnimateDiff workflows
+**Fix:** Increase to 1200s (20 min) in Endpoint settings.
 
-SDXL + IP-Adapter pipelines
+### Models Not Found
 
-Cost-efficient production setups
+**Cause:** Network Volume not mounted or symlinks not created.
 
-⚡ Summary
+**Fix:**
 
-This setup gives you:
+1. Verify Network Volume is in same region as endpoint
+2. Check `start.sh` logs for "Network Volume bulundu"
+3. Manually verify models exist in the volume
 
-✔ Local workflow control
-✔ On-demand RTX-class performance
-✔ Zero idle costs
-✔ Preloaded FaceSwap + SDXL ecosystem
-✔ Fully Dockerized & Serverless ready
+---
 
-Design locally. Render in the cloud.
-Pay only for what you use.
->>>>>>> 08463719eea74dafb7d188e25ae3d2015cb96a5c
+## Known Issues
+
+### 1. Video Output Not Downloaded to Local Machine
+
+**Status:** Open
+
+When using the RunPod Worker node locally in ComfyUI, the processed **video file is not automatically saved** to the local machine. The video frames (as individual PNGs) are uploaded to Cloudflare R2 successfully, but the combined video output is not downloaded to the desktop.
+
+**Workaround:**
+
+- Download the video directly from Cloudflare R2 bucket
+- Use the signed URLs returned in the API response
+- Check the R2 bucket for `.mp4` files in the job folder
+
+### 2. NSFW Detection Model Downloaded on Every Cold Start
+
+ReActor downloads a ~328 MB NSFW detection model on first run. This is cached within the container but lost on cold starts.
+
+**Potential Fix:** Pre-download this model into the Docker image or Network Volume.
+
+### 3. AnimateDiff Motion Models Not Found
+
+Warning in logs: `No motion models found`. This doesn't affect face swap workflows but will affect animation workflows.
+
+**Fix:** Download motion models to `animatediff_models/` in Network Volume.
+
+---
+
+## Building & Deploying
+
+### Full Build & Push
+
+```bash
+# Build
+docker build -t ghcr.io/YOUR_USERNAME/comfyui-faceswap-worker:latest .
+
+# Login to GHCR
+echo $GITHUB_TOKEN | docker login ghcr.io -u YOUR_USERNAME --password-stdin
+
+# Push
+docker push ghcr.io/YOUR_USERNAME/comfyui-faceswap-worker:latest
+```
+
+### After Pushing
+
+1. Go to RunPod → Your Endpoint → **Manage** → **New Release**
+2. Wait for workers to show new version number
+3. Delete old workers if they don't auto-update
+4. Test with a simple workflow first
+
+### GitHub Actions (CI/CD)
+
+A GitHub Actions workflow is available at `.github/workflows/` for automated builds on push.
+
+---
+
+## License
+
+This project uses the official RunPod Worker ComfyUI base image. See individual component licenses:
+
+- RunPod Worker: [RunPod License](https://runpod.io)
+- ComfyUI: [GPL-3.0](https://github.com/comfyanonymous/ComfyUI)
+- ReActor: [AGPL-3.0](https://github.com/Gourieff/ComfyUI-ReActor)
+- InsightFace: [MIT](https://github.com/deepinsight/insightface)
