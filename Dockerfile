@@ -188,15 +188,4 @@ RUN cd /comfyui/custom_nodes && \
 # Eksik çekirdek kütüphaneler (WanVideo ve Subpack için)
 RUN pip install --no-cache-dir accelerate diffusers transformers lark
 
-# BOPBTL (Eski Fotoğraf Restorasyon) ağırlıkları ve Yüz Kurtarma (GFPGAN) indirmeleri
-RUN apt-get update && apt-get install -y wget unzip && \
-    mkdir -p /comfyui/models/checkpoints /comfyui/models/vae /comfyui/models/facedetection && \
-    wget -q https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/global_checkpoints.zip -O /tmp/global_checkpoints.zip && \
-    unzip -q /tmp/global_checkpoints.zip -d /tmp/bopbtl_global && \
-    mv /tmp/bopbtl_global/Global/checkpoints/restoration/VAE_A_quality/latest_net_G.pth /comfyui/models/vae/VAE_A_quality.pth && \
-    mv /tmp/bopbtl_global/Global/checkpoints/restoration/VAE_B_quality/latest_net_G.pth /comfyui/models/vae/VAE_B_quality.pth && \
-    mv /tmp/bopbtl_global/Global/checkpoints/restoration/mapping_quality/latest_net_mapping_net.pth /comfyui/models/checkpoints/mapping_quality.pth && \
-    mv /tmp/bopbtl_global/Global/checkpoints/detection/FT_Epoch_latest.pt /comfyui/models/checkpoints/FT_Epoch_latest.pt && \
-    rm -rf /tmp/global_checkpoints.zip /tmp/bopbtl_global
-
 CMD ["/start.sh"]
