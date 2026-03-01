@@ -115,4 +115,42 @@ RUN mkdir -p /comfyui/models/ultralytics/bbox && \
     https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8m.pt && \
     echo 'YOLO face model OK'
 
+# =============================================================
+# 9. SISTEM KODEKLERI & EKSIK FFMPEG (H264/LIBX264)
+# (Cache kirilmamasi icin en sona eklendi)
+# =============================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg x264 libx264-dev && rm -rf /var/lib/apt/lists/*
+
+# =============================================================
+# 10. SES / VOKAL AYIRICI DUGUMLER (Audio Separator)
+# (Cache kirilmamasi icin en sona eklendi)
+# =============================================================
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/jags111/ComfyUI_Jags_AudioSeparator.git && \
+    cd ComfyUI_Jags_AudioSeparator && \
+    pip install --no-cache-dir -r requirements.txt || true
+
+
+# =============================================================
+# 11. VIDEO YAZI/ALTYAZI VE TAM KONTROL (WAS Suite)
+# (Cache kirilmamasi icin en sona eklendi)
+# =============================================================
+# WAS node suite ile resim/video uzerine yazi, altyazi ve efektler eklenebilir.
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/WASasquatch/was-node-suite-comfyui && \
+    cd was-node-suite-comfyui && \
+    pip install --no-cache-dir -r requirements.txt || true
+
+
+# =============================================================
+# 12. SES KLONLAMA VE DEGISTIRME (ComfyUI-RVC)
+# (Cache kirilmamasi icin en sona eklendi)
+# =============================================================
+# Bir insanin sesini baskasinin sesiyle degistirmek (Voice Conversion)
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/AIFSH/ComfyUI-RVC.git && \
+    cd ComfyUI-RVC && \
+    pip install --no-cache-dir -r requirements.txt || true
+
 CMD ["/start.sh"]
