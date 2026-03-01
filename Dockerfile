@@ -123,12 +123,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg x264 libx264-dev && rm -rf /var/lib/apt/lists/*
 
 # =============================================================
-# 10. SES / VOKAL AYIRICI DUGUMLER (Audio Separator)
+# 10. SES / VOKAL AYIRICI DUGUMLER (Audio Separator UVR)
 # (Cache kirilmamasi icin en sona eklendi)
 # =============================================================
 RUN cd /comfyui/custom_nodes && \
-    git clone https://github.com/jags111/ComfyUI_Jags_AudioSeparator.git && \
-    cd ComfyUI_Jags_AudioSeparator && \
+    git clone https://github.com/ddontsov93/ComfyUI-AudioSeparator.git && \
+    cd ComfyUI-AudioSeparator && \
     pip install --no-cache-dir -r requirements.txt || true
 
 
@@ -152,5 +152,37 @@ RUN cd /comfyui/custom_nodes && \
     git clone https://github.com/AIFSH/ComfyUI-RVC.git && \
     cd ComfyUI-RVC && \
     pip install --no-cache-dir -r requirements.txt || true
+
+# =============================================================
+# 13. ULTRALYTICS YOLO ÇÖZÜMÜ (Impact-Subpack)
+# =============================================================
+# UltralyticsDetectorProvider eklentisini getiren ana paket
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/ltdrdata/ComfyUI-Impact-Subpack.git && \
+    cd ComfyUI-Impact-Subpack && \
+    pip install --no-cache-dir -r requirements.txt || true
+
+# =============================================================
+# 14. EKSTRA DEV EKLENTILERI (LayerStyle, WanVideo, EasyUse, vb.)
+# =============================================================
+RUN cd /comfyui/custom_nodes && \
+    git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git && \
+    git clone https://github.com/cdb-boop/ComfyUI-Bringing-Old-Photos-Back-to-Life.git && \
+    git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
+    git clone https://github.com/rgthree/rgthree-comfy.git && \
+    git clone https://github.com/yolain/ComfyUI-Easy-Use.git && \
+    git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git && \
+    git clone https://github.com/kijai/ComfyUI-Florence2.git && \
+    git clone https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git && \
+    git clone https://github.com/cubiq/ComfyUI_InstantID.git && \
+    git clone https://github.com/chflame163/ComfyUI-LayerStyle.git && \
+    cd comfyui_controlnet_aux && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../ComfyUI-Bringing-Old-Photos-Back-to-Life && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../ComfyUI-Easy-Use && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../ComfyUI-WanVideoWrapper && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../ComfyUI-Florence2 && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../ComfyUI_InstantID && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../ComfyUI-LayerStyle && pip install --no-cache-dir -r requirements.txt || true && \
+    cd ../rgthree-comfy && pip install --no-cache-dir -r requirements.txt || true
 
 CMD ["/start.sh"]
