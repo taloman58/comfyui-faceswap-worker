@@ -1,0 +1,25 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR Public..."
+      - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+      - IMAGE_URI="public.ecr.aws/h7f4j6a2/comfyui-faceswap-worker"
+      - echo "Image URI = $IMAGE_URI"
+
+  build:
+    commands:
+      - echo "Build started on `date`"
+      - echo "Building Docker image..."
+      - docker build -t comfyui-faceswap-worker .
+      - docker tag comfyui-faceswap-worker:latest $IMAGE_URI:latest
+      - docker tag comfyui-faceswap-worker:latest $IMAGE_URI:$CODEBUILD_BUILD_NUMBER
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image to ECR Public..."
+      - docker push $IMAGE_URI:latest
+      - docker push $IMAGE_URI:$CODEBUILD_BUILD_NUMBER
+      - echo "Build completed on `date`"
+      - echo "Image pushed to $IMAGE_URI:latest"

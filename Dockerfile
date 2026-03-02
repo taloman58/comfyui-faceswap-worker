@@ -150,6 +150,9 @@ RUN cd /comfyui/custom_nodes && \
     cd ComfyUI-RVC && \
     pip install --no-cache-dir -r requirements.txt || true
 
+# faiss: RVC (ses klonlama) icin zorunlu - eksik olunca import FAILED oluyordu
+RUN pip install --no-cache-dir faiss-gpu || pip install --no-cache-dir faiss-cpu
+
 # =============================================================
 # 13. ULTRALYTICS YOLO ÇÖZÜMÜ (Impact-Subpack)
 # =============================================================
