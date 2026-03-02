@@ -28,9 +28,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Time to wait between API check attempts in milliseconds
-COMFY_API_AVAILABLE_INTERVAL_MS = 50
+COMFY_API_AVAILABLE_INTERVAL_MS = 1000
 # Maximum number of API check attempts
-COMFY_API_AVAILABLE_MAX_RETRIES = 500
+# RVC node startup: ~20 dosya indirir, ~90 saniye surebilir
+# 180 deneme x 1000ms = 3 dakika bekleme suresi
+COMFY_API_AVAILABLE_MAX_RETRIES = 180
 # Websocket reconnection behaviour (can be overridden through environment variables)
 # NOTE: more attempts and diagnostics improve debuggability whenever ComfyUI crashes mid-job.
 #   ÔÇó WEBSOCKET_RECONNECT_ATTEMPTS sets how many times we will try to reconnect.
