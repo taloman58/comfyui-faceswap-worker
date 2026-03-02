@@ -66,15 +66,12 @@ RUN cd /comfyui/models/nsfw_detector/vit-base-nsfw-detector && \
     echo 'NSFW model OK'
 
 # =============================================================
-# 5. HANDLER
+# 5. HANDLER (YENİ YERİNE TAŞINDI)
 # =============================================================
-COPY handler.py /handler.py
 
 # =============================================================
-# 6. STARTUP SCRIPT
+# 6. STARTUP SCRIPT (YENİ YERİNE TAŞINDI)
 # =============================================================
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
 
 # =============================================================
 # 7. COLD START MODEL PRE-DOWNLOADS
@@ -165,27 +162,27 @@ RUN cd /comfyui/custom_nodes && \
 # =============================================================
 # 14. EKSTRA DEV EKLENTILERI (LayerStyle, WanVideo, EasyUse, vb.)
 # =============================================================
-RUN cd /comfyui/custom_nodes && \
-    git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git && \
-    git clone https://github.com/cdb-boop/ComfyUI-Bringing-Old-Photos-Back-to-Life.git && \
-    git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git && \
-    git clone https://github.com/rgthree/rgthree-comfy.git && \
-    git clone https://github.com/yolain/ComfyUI-Easy-Use.git && \
-    git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git && \
-    git clone https://github.com/kijai/ComfyUI-Florence2.git && \
-    git clone https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git && \
-    git clone https://github.com/cubiq/ComfyUI_InstantID.git && \
-    git clone https://github.com/chflame163/ComfyUI-LayerStyle.git && \
-    cd comfyui_controlnet_aux && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../ComfyUI-Bringing-Old-Photos-Back-to-Life && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../ComfyUI-Easy-Use && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../ComfyUI-WanVideoWrapper && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../ComfyUI-Florence2 && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../ComfyUI_InstantID && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../ComfyUI-LayerStyle && pip install --no-cache-dir -r requirements.txt || true && \
-    cd ../rgthree-comfy && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git && cd comfyui_controlnet_aux && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/cdb-boop/ComfyUI-Bringing-Old-Photos-Back-to-Life.git && cd ComfyUI-Bringing-Old-Photos-Back-to-Life && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
+RUN cd /comfyui/custom_nodes && git clone https://github.com/rgthree/rgthree-comfy.git && cd rgthree-comfy && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/yolain/ComfyUI-Easy-Use.git && cd ComfyUI-Easy-Use && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git && cd ComfyUI-WanVideoWrapper && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/kijai/ComfyUI-Florence2.git && cd ComfyUI-Florence2 && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git
+RUN cd /comfyui/custom_nodes && git clone https://github.com/cubiq/ComfyUI_InstantID.git && cd ComfyUI_InstantID && pip install --no-cache-dir -r requirements.txt || true
+RUN cd /comfyui/custom_nodes && git clone https://github.com/chflame163/ComfyUI-LayerStyle.git && cd ComfyUI-LayerStyle && pip install --no-cache-dir -r requirements.txt || true
 
 # Eksik çekirdek kütüphaneler (WanVideo ve Subpack için)
 RUN pip install --no-cache-dir accelerate diffusers transformers lark
+
+# =============================================================
+# 5. HANDLER VE STARTUP SCRIPT
+# CACHE KIRMAMASI İÇİN EN SONA TAŞINDI
+# =============================================================
+COPY handler.py /handler.py
+COPY start.sh /start.sh
+COPY sync_from_r2.py /sync_from_r2.py
+RUN chmod +x /start.sh
 
 CMD ["/start.sh"]

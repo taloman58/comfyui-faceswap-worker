@@ -5,6 +5,7 @@ import urllib.request
 import urllib.parse
 import time
 import os
+import io
 import requests
 import base64
 from io import BytesIO
@@ -169,13 +170,13 @@ def validate_input(job_input):
     # Validate 'images' in input, if provided
     images = job_input.get("images")
     if images is not None:
-        if not isinstance(images, list) or not all(
-            "name" in image and "image" in image for image in images
-        ):
-            return (
-                None,
-                "'images' must be a list of objects with 'name' and 'image' keys",
-            )
+        if not isinstance(images, list):
+            return None, "'images' must be a list"
+        for img in images:
+            if "name" not in img:
+                return None, "Each image must have a 'name' key"
+            if "image" not in img and "r2_url" not in img:
+                return None, "Each image must have 'image' (base64) or 'r2_url' key"
 
     # Optional: API key for Comfy.org API Nodes, passed per-request
     comfy_org_api_key = job_input.get("comfy_org_api_key")
@@ -226,86 +227,59 @@ def check_server(url, retries=500, delay=50):
 
 def upload_images(images):
     """
-    Upload a list of base64 encoded images to the ComfyUI server using the /upload/image endpoint.
-
-    Args:
-        images (list): A list of dictionaries, each containing the 'name' of the image and the 'image' as a base64 encoded string.
-
-    Returns:
-        dict: A dictionary indicating success or error.
+    Upload images/videos to ComfyUI.
+    Supports both base64 ('image' key) and R2 URL ('r2_url' key).
     """
     if not images:
         return {"status": "success", "message": "No images to upload", "details": []}
 
     responses = []
     upload_errors = []
-
-    print(f"worker-comfyui - Uploading {len(images)} image(s)...")
+    print(f"worker-comfyui - Uploading {len(images)} file(s)...")
 
     for image in images:
         try:
             name = image["name"]
-            image_data_uri = image["image"]  # Get the full string (might have prefix)
 
-            # --- Strip Data URI prefix if present ---
-            if "," in image_data_uri:
-                # Find the comma and take everything after it
-                base64_data = image_data_uri.split(",", 1)[1]
+            # ── R2 URL → indir ────────────────────────────────────────────
+            if "r2_url" in image:
+                r2_url = image["r2_url"]
+                print(f"worker-comfyui - R2'den indiriliyor: {name} <- {r2_url}")
+                resp = requests.get(r2_url, timeout=300)
+                resp.raise_for_status()
+                blob = resp.content
+                print(f"worker-comfyui - R2 indirme OK: {name} ({len(blob)/(1024*1024):.1f} MB)")
+
+            # ── Base64 → decode ───────────────────────────────────────────
             else:
-                # Assume it's already pure base64
-                base64_data = image_data_uri
-            # --- End strip ---
+                image_data_uri = image["image"]
+                if "," in image_data_uri:
+                    base64_data = image_data_uri.split(",", 1)[1]
+                else:
+                    base64_data = image_data_uri
+                blob = base64.b64decode(base64_data)
 
-            blob = base64.b64decode(base64_data)  # Decode the cleaned data
-
-            # Prepare the form data
+            # ── ComfyUI'a yukle ───────────────────────────────────────────
             files = {
-                "image": (name, BytesIO(blob), "image/png"),
+                "image": (name, io.BytesIO(blob), "application/octet-stream"),
                 "overwrite": (None, "true"),
             }
-
-            # POST request to upload the image
             response = requests.post(
-                f"http://{COMFY_HOST}/upload/image", files=files, timeout=30
+                f"http://{COMFY_HOST}/upload/image", files=files, timeout=120
             )
             response.raise_for_status()
+            responses.append(f"Uploaded {name}")
+            print(f"worker-comfyui - Uploaded {name}")
 
-            responses.append(f"Successfully uploaded {name}")
-            print(f"worker-comfyui - Successfully uploaded {name}")
-
-        except base64.binascii.Error as e:
-            error_msg = f"Error decoding base64 for {image.get('name', 'unknown')}: {e}"
-            print(f"worker-comfyui - {error_msg}")
-            upload_errors.append(error_msg)
-        except requests.Timeout:
-            error_msg = f"Timeout uploading {image.get('name', 'unknown')}"
-            print(f"worker-comfyui - {error_msg}")
-            upload_errors.append(error_msg)
-        except requests.RequestException as e:
-            error_msg = f"Error uploading {image.get('name', 'unknown')}: {e}"
-            print(f"worker-comfyui - {error_msg}")
-            upload_errors.append(error_msg)
         except Exception as e:
-            error_msg = (
-                f"Unexpected error uploading {image.get('name', 'unknown')}: {e}"
-            )
+            error_msg = f"Error uploading {image.get('name', 'unknown')}: {e}"
             print(f"worker-comfyui - {error_msg}")
             upload_errors.append(error_msg)
 
     if upload_errors:
-        print(f"worker-comfyui - image(s) upload finished with errors")
-        return {
-            "status": "error",
-            "message": "Some images failed to upload",
-            "details": upload_errors,
-        }
+        return {"status": "error", "message": "Some files failed", "details": upload_errors}
 
-    print(f"worker-comfyui - image(s) upload complete")
-    return {
-        "status": "success",
-        "message": "All images uploaded successfully",
-        "details": responses,
-    }
+    return {"status": "success", "message": "All files uploaded", "details": responses}
 
 
 def get_available_models():
