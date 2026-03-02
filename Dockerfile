@@ -1,7 +1,7 @@
 # =============================================================
 # 1. BASE IMAGE & SYSTEM DEPENDENCIES
 # =============================================================
-FROM runpod/worker-comfyui:5.7.1-flux1-schnell
+FROM runpod/worker-comfyui:5.7.1-base
 
 # Kurulum sirasinda interaktif ekranlarin cikmasini engeller
 ENV DEBIAN_FRONTEND=noninteractive
