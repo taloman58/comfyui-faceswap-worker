@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir \
     insightface==0.7.3 \
     onnxruntime-gpu \
     torchvision \
-    faiss-gpu \
+    faiss-cpu \
     accelerate diffusers transformers lark \
     --extra-index-url https://download.pytorch.org/whl/cu121 || true
 
